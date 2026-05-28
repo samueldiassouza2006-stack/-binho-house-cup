@@ -78,12 +78,16 @@ body{
 .score-card{background:var(--bg3);border:2px solid var(--border);border-radius:1rem;padding:1rem .65rem;
   display:flex;flex-direction:column;align-items:center;gap:.65rem;transition:border-color .3s,box-shadow .3s}
 .score-card.flash{border-color:var(--gold);box-shadow:0 0 22px rgba(251,191,36,.28)}
-.score-name{font-family:'Oswald',sans-serif;font-size:.88rem;font-weight:600;color:#FBBF24;
-  text-align:center;border-bottom:1px dashed var(--gold-faint);cursor:pointer;padding-bottom:2px;
-  transition:color .2s;word-break:break-word;max-width:100%}
-.score-name:hover{color:#FDE68A;border-color:var(--gold)}
-.score-inp{font-family:'Oswald',sans-serif;font-size:.88rem;font-weight:600;color:#FBBF24;
-  background:transparent;border:none;border-bottom:2px solid var(--gold);outline:none;text-align:center;width:100%;max-width:9rem}
+.score-select{
+  font-family:'Oswald',sans-serif;font-size:.78rem;font-weight:600;color:var(--gold);
+  background:#111;border:1px solid var(--gold-faint);border-radius:.45rem;
+  outline:none;text-align:center;width:100%;padding:.3rem .2rem;
+  cursor:pointer;-webkit-appearance:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2392400E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:calc(100% - .45rem) center;padding-right:1.4rem;
+}
+.score-select:focus{border-color:var(--gold);box-shadow:0 0 0 2px rgba(251,191,36,.2)}
+.score-select option{background:#111;color:#fff}
 .score-num{font-family:'Bebas Neue',cursive;font-size:4.2rem;color:var(--gold);line-height:1;user-select:none}
 .pips{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
 .pip{width:13px;height:13px;border-radius:3px;border:1px solid;transition:all .2s}
@@ -171,13 +175,15 @@ const DB=[
   {flag:"🇧🇷",name:"Davi / Gonzales"}
 ];
 
+const DUPLA_OPTS=DB.map(d=>d.flag+" "+d.name);
+
 let S={
   tab:"home",
   sc:[0,0],
-  sn:[DB[0].flag+" "+DB[0].name, DB[2].flag+" "+DB[2].name],
-  editSc:null, flashSc:null,
+  sn:[DUPLA_OPTS[0],DUPLA_OPTS[2]],
+  flashSc:null,
   dp:DB.map(d=>d.flag+" "+d.name),
-  sorted:false, spinning:false,
+  sorted:false,spinning:false,
   r1a:null,r1b:null,r2w:null,r2l:null,ch:null,th:null
 };
 
@@ -197,15 +203,12 @@ const Lr2l=()=>loser(L1a(),L1b(),S.r2l);
 
 function shuffle(a){const r=[...a];for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];}return r;}
 
-// ── RENDER ────────────────────────────────────────────────────────────────────
 function render(){
   g("tabs").innerHTML=TABS.map(t=>`<button class="tab${S.tab===t.k?' active':''}" onclick="setTab('${t.k}')">${t.l}</button>`).join("");
   const views={home:vHome,placar:vPlacar,chaveamento:vChave};
   g("content").innerHTML=views[S.tab]();
-  if(S.tab==="placar"&&S.editSc!==null){const i=g("sci");if(i){i.focus();i.select();}}
 }
 
-// ── HOME ──────────────────────────────────────────────────────────────────────
 function vHome(){
   return`<div class="home-hero"><div class="home-trophy">🏆</div>
     <div class="home-big">BINHO HOUSE CUP</div>
@@ -222,19 +225,16 @@ function vHome(){
   <p class="roul-note">🃏 Confrontos definidos na hora pela <span>Roleta</span> — use o chaveamento para registrar os resultados</p>`;
 }
 
-// ── PLACAR ────────────────────────────────────────────────────────────────────
 function vPlacar(){
   const w=S.sc[0]===12?0:S.sc[1]===12?1:null;
   const banner=w!==null?`<div class="win-banner">🔥 ${esc(S.sn[w])} VENCEU! 🔥</div>`:"";
   const cards=[0,1].map(i=>{
     const s=S.sc[i];
     const pips=Array.from({length:12},(_,j)=>`<div class="pip ${j<s?'on':'off'}"></div>`).join("");
-    const nm=S.editSc===i
-      ?`<input id="sci" class="score-inp" type="text" value="${esc(S.sn[i])}" maxlength="22"
-          onblur="commitName(${i})" onkeydown="if(event.key==='Enter')this.blur()">`
-      :`<div class="score-name" onclick="editName(${i})">${esc(S.sn[i])}</div>`;
+    const opts=DUPLA_OPTS.map(o=>`<option value="${esc(o)}"${S.sn[i]===o?' selected':''}>${esc(o)}</option>`).join("");
+    const sel=`<select class="score-select" onchange="chName(${i},this.value)">${opts}</select>`;
     return`<div class="score-card${S.flashSc===i?' flash':''}">
-      ${nm}
+      ${sel}
       <div class="score-num">${s}</div>
       <div class="pips">${pips}</div>
       <div class="score-btns">
@@ -250,11 +250,10 @@ function vPlacar(){
   </div>`;
 }
 
-// ── CHAVEAMENTO ───────────────────────────────────────────────────────────────
 function mCard(label,sub,tA,tB,win,fnName,gold){
   const can=t=>t&&!win&&tA&&tB;
   const row=(t,top)=>{
-    const isW=win&&win===t, isE=win&&win!==t;
+    const isW=win&&win===t,isE=win&&win!==t;
     let cls="m-team"+(can(t)?" can":"")+(isW?" win":"")+(isE?" elim":"");
     const da=can(t)?`data-fn="${fnName}" data-team="${esc(t)}" onclick="mClick(this)"`:"";
     const tnc="m-tname"+(isW?" w":"")+(t?"":" em");
@@ -320,19 +319,15 @@ function vChave(){
   </div>`;
 }
 
-// ── HANDLERS ─────────────────────────────────────────────────────────────────
-function setTab(t){S.tab=t;S.editSc=null;render();}
-
+function setTab(t){S.tab=t;render();}
+function chName(i,v){S.sn[i]=v;render();}
 function chSc(i,d){
   S.sc[i]=Math.max(0,S.sc[i]+d);
   if(S.sc[i]>12)S.sc[i]=0;
   if(d>0){S.flashSc=i;render();setTimeout(()=>{S.flashSc=null;render();},500);}
   else render();
 }
-function editName(i){S.editSc=i;render();}
-function commitName(i){const el=g("sci");if(el){const v=el.value.trim();if(v)S.sn[i]=v;}S.editSc=null;render();}
 function rstSc(){S.sc=[0,0];render();}
-
 function mClick(el){const fn=el.dataset.fn,t=el.dataset.team;window[fn](t);}
 function rstB(){S.r1a=null;S.r1b=null;S.r2w=null;S.r2l=null;S.ch=null;S.th=null;}
 function rstChave(){rstB();render();}
