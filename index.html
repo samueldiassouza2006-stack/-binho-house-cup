@@ -117,7 +117,7 @@ body{
 .match.gld{border-color:var(--gold-dim)}
 .m-team{display:flex;align-items:center;gap:.45rem;padding:.5rem .65rem;transition:background .15s;
   border-bottom:1px solid #1a1a1a}
-.m-team:last-child{border-bottom:none}
+.m-team:last-of-type{border-bottom:none}
 .m-team.can{cursor:pointer}
 .m-team.can:hover{background:rgba(255,255,255,.04)}
 .m-team.can:active{background:rgba(255,255,255,.07)}
@@ -127,7 +127,22 @@ body{
   flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .m-tname.w{color:var(--gold)}
 .m-tname.em{color:#2d2d2d;font-style:italic;font-size:.68rem;font-weight:400;font-family:'Inter',sans-serif}
+.m-score{font-family:'Oswald',sans-serif;font-size:.7rem;font-weight:700;min-width:1.2rem;text-align:right}
+.m-score.w{color:var(--gold)}
+.m-score.l{color:#374151}
 .m-hint{font-size:.58rem;color:#2d2d2d;margin-top:.12rem}
+.m-footer{border-top:1px solid #1a1a1a;padding:.3rem .65rem;display:flex;align-items:center;gap:.35rem}
+.m-footer-score{font-family:'Bebas Neue',cursive;font-size:.85rem;color:var(--gold);letter-spacing:.04em;flex:1;text-align:center}
+.m-footer-edit{font-size:.6rem;color:#374151;cursor:pointer;text-decoration:underline;white-space:nowrap}
+.score-inp-row{border-top:1px solid #1a1a1a;padding:.4rem .5rem;display:flex;align-items:center;gap:.3rem;background:#111}
+.score-inp-row span{font-size:.7rem;color:var(--dim);font-family:'Oswald',sans-serif}
+.score-inp-box{width:2.4rem;background:#1a1a1a;border:1px solid #333;border-radius:.3rem;
+  color:var(--gold);font-family:'Oswald',sans-serif;font-size:.85rem;font-weight:700;
+  text-align:center;padding:.2rem .1rem;outline:none}
+.score-inp-box:focus{border-color:var(--gold-dim)}
+.score-inp-ok{padding:.2rem .55rem;border-radius:.3rem;background:var(--gold-dim);border:none;
+  color:#FDE68A;font-family:'Oswald',sans-serif;font-size:.7rem;font-weight:700;cursor:pointer;letter-spacing:.05em}
+.score-inp-ok:active{opacity:.7}
 .podium{display:flex;flex-direction:column;gap:.5rem;width:100%;margin-top:.5rem}
 .pod-row{display:flex;align-items:center;gap:.8rem;background:var(--bg3);border:1px solid var(--border);
   border-radius:.85rem;padding:.65rem .9rem}
@@ -177,6 +192,7 @@ const DB=[
 
 const DUPLA_OPTS=DB.map(d=>d.flag+" "+d.name);
 
+// sc = placar truco, ms = placar das partidas do chaveamento
 let S={
   tab:"home",
   sc:[0,0],
@@ -184,7 +200,9 @@ let S={
   flashSc:null,
   dp:DB.map(d=>d.flag+" "+d.name),
   sorted:false,spinning:false,
-  r1a:null,r1b:null,r2w:null,r2l:null,ch:null,th:null
+  r1a:null,r1b:null,r2w:null,r2l:null,ch:null,th:null,
+  ms:{r1a:null,r1b:null,r2w:null,r2l:null,ch:null,th:null},
+  scoreEdit:null
 };
 
 const TABS=[
@@ -209,6 +227,10 @@ function render(){
   g("tabs").innerHTML=TABS.map(t=>`<button class="tab${S.tab===t.k?' active':''}" onclick="setTab('${t.k}')">${t.l}</button>`).join("");
   const views={home:vHome,placar:vPlacar,chaveamento:vChave};
   g("content").innerHTML=views[S.tab]();
+  if(S.scoreEdit){
+    const a=g("msa_"+S.scoreEdit),b=g("msb_"+S.scoreEdit);
+    if(a){a.focus();a.select();}
+  }
 }
 
 function vHome(){
@@ -252,22 +274,73 @@ function vPlacar(){
   </div>`;
 }
 
-function mCard(label,sub,tA,tB,win,fnName,gold){
+// Monta o rodapé de placar de cada partida do chaveamento
+function mFooter(key, win, tA, tB){
+  if(!win) return "";
+  const ms=S.ms[key];
+  const editing=S.scoreEdit===key;
+  if(editing){
+    const vA=ms?ms.a:"";
+    const vB=ms?ms.b:"";
+    return`<div class="score-inp-row">
+      <input id="msa_${key}" class="score-inp-box" type="number" min="0" max="99" value="${vA}" placeholder="W" onkeydown="if(event.key==='Enter')saveScore('${key}')">
+      <span>×</span>
+      <input id="msb_${key}" class="score-inp-box" type="number" min="0" max="99" value="${vB}" placeholder="L" onkeydown="if(event.key==='Enter')saveScore('${key}')">
+      <button class="score-inp-ok" onclick="saveScore('${key}')">OK</button>
+    </div>`;
+  }
+  if(ms){
+    const winScore=win===tA?ms.a:ms.b;
+    const loseScore=win===tA?ms.b:ms.a;
+    return`<div class="m-footer">
+      <span class="m-footer-score">${winScore} × ${loseScore}</span>
+      <span class="m-footer-edit" onclick="editScore('${key}')">editar</span>
+    </div>`;
+  }
+  return`<div class="m-footer">
+    <span class="m-footer-edit" style="flex:1;text-align:center" onclick="editScore('${key}')">+ registrar placar</span>
+  </div>`;
+}
+
+function mCard(label,sub,tA,tB,win,fnName,gold,scoreKey){
   const can=t=>t&&!win&&tA&&tB;
-  const row=(t,top)=>{
+  const row=(t)=>{
     const isW=win&&win===t,isE=win&&win!==t;
     let cls="m-team"+(can(t)?" can":"")+(isW?" win":"")+(isE?" elim":"");
     const da=can(t)?`data-fn="${fnName}" data-team="${esc(t)}" onclick="mClick(this)"`:"";
     const tnc="m-tname"+(isW?" w":"")+(t?"":" em");
     const tr=isW?`<span style="font-size:.7rem">🏆</span>`:"";
-    return`<div class="${cls}" ${da}>${tr}<span class="${tnc}">${t?esc(t):"aguardando..."}</span></div>`;
+    const sc=win?(isW?`<span class="m-score w">${getTeamScore(scoreKey,t,tA,tB,'w')}</span>`:`<span class="m-score l">${getTeamScore(scoreKey,t,tA,tB,'l')}</span>`):"";
+    return`<div class="${cls}" ${da}>${tr}<span class="${tnc}">${t?esc(t):"aguardando..."}</span>${sc}</div>`;
   };
   const hint=(!win&&tA&&tB)?`<div class="m-hint">↑ clique no vencedor</div>`:"";
+  const footer=mFooter(scoreKey,win,tA,tB);
   return`<div class="m-wrap">
     ${label?`<div class="m-lbl${gold?' gold':''}">${label}</div>`:""}
     ${sub?`<div class="m-sub">${sub}</div>`:""}
-    <div class="match${gold?' gld':''}">${row(tA,1)}${row(tB,0)}</div>
+    <div class="match${gold?' gld':''}">
+      ${row(tA)}${row(tB)}
+      ${footer}
+    </div>
     ${hint}</div>`;
+}
+
+function getTeamScore(key,team,tA,tB,type){
+  const ms=S.ms[key];
+  if(!ms) return "";
+  const isA=team===tA;
+  return type==='w'?(isA?ms.a:ms.b):(isA?ms.a:ms.b);
+}
+
+function editScore(key){S.scoreEdit=key;render();}
+function saveScore(key){
+  const a=g("msa_"+key),b=g("msb_"+key);
+  if(a&&b){
+    const va=parseInt(a.value);
+    const vb=parseInt(b.value);
+    if(!isNaN(va)&&!isNaN(vb)){S.ms[key]={a:va,b:vb};}
+  }
+  S.scoreEdit=null;render();
 }
 
 function vChave(){
@@ -282,44 +355,32 @@ function vChave(){
     ?`<button class="btn-sort spin" disabled>🎲 SORTEANDO...</button>`
     :`<button class="btn-sort" onclick="sortear()">🎲 SORTEAR CHAVEAMENTO</button>`;
 
-  const m1a=mCard("Jogo A","vencedores →",S.dp[0],S.dp[1],S.r1a,"wR1a",0);
-  const m1b=mCard("Jogo B","vencedores →",S.dp[2],S.dp[3],S.r1b,"wR1b",0);
-  const m2w=mCard("Semi vencedores","",S.r1a,S.r1b,S.r2w,"wR2w",0);
-  const m2l=mCard("Semi perdedores","",l1a,l1b,S.r2l,"wR2l",0);
-  const mF=mCard("🏆 Grande Final","",S.r2w,S.r2l,S.ch,"wCh",1);
-  const m3=mCard("🥉 3º e 4º lugar","",lr2w,lr2l,S.th,"wTh",0);
+  const m1a=mCard("Jogo A","vencedores →",S.dp[0],S.dp[1],S.r1a,"wR1a",0,"r1a");
+  const m1b=mCard("Jogo B","vencedores →",S.dp[2],S.dp[3],S.r1b,"wR1b",0,"r1b");
+  const m2w=mCard("Semi vencedores","",S.r1a,S.r1b,S.r2w,"wR2w",0,"r2w");
+  const m2l=mCard("Semi perdedores","",l1a,l1b,S.r2l,"wR2l",0,"r2l");
+  const mF=mCard("🏆 Grande Final","",S.r2w,S.r2l,S.ch,"wCh",1,"ch");
+  const m3=mCard("🥉 3º e 4º lugar","",lr2w,lr2l,S.th,"wTh",0,"th");
 
   const podium=(S.ch||S.th||sec||fou)?`
     <p class="sec-label" style="margin-top:.5rem">✦ Classificação Final ✦</p>
     <div class="podium">
       ${S.ch?`<div class="pod-row p1">
-        <div class="pod-pos p1">1</div>
-        <div class="pod-icon">🏆</div>
-        <div class="pod-info">
-          <div class="pod-name p1">${esc(S.ch)}</div>
-          <div class="pod-lbl">Campeão · R$ 240,00</div>
-        </div></div>`:""}
+        <div class="pod-pos p1">1</div><div class="pod-icon">🏆</div>
+        <div class="pod-info"><div class="pod-name p1">${esc(S.ch)}</div>
+        <div class="pod-lbl">Campeão · R$ 240,00</div></div></div>`:""}
       ${sec?`<div class="pod-row p2">
-        <div class="pod-pos p2">2</div>
-        <div class="pod-icon">🥈</div>
-        <div class="pod-info">
-          <div class="pod-name p2">${esc(sec)}</div>
-          <div class="pod-lbl">Vice-campeão</div>
-        </div></div>`:""}
+        <div class="pod-pos p2">2</div><div class="pod-icon">🥈</div>
+        <div class="pod-info"><div class="pod-name p2">${esc(sec)}</div>
+        <div class="pod-lbl">Vice-campeão</div></div></div>`:""}
       ${S.th?`<div class="pod-row p3">
-        <div class="pod-pos p3">3</div>
-        <div class="pod-icon">🥉</div>
-        <div class="pod-info">
-          <div class="pod-name p3">${esc(S.th)}</div>
-          <div class="pod-lbl">3º Lugar</div>
-        </div></div>`:""}
+        <div class="pod-pos p3">3</div><div class="pod-icon">🥉</div>
+        <div class="pod-info"><div class="pod-name p3">${esc(S.th)}</div>
+        <div class="pod-lbl">3º Lugar</div></div></div>`:""}
       ${fou?`<div class="pod-row p4">
-        <div class="pod-pos p4">4</div>
-        <div class="pod-icon">💀</div>
-        <div class="pod-info">
-          <div class="pod-name p4">${esc(fou)}</div>
-          <div class="pod-lbl">4º Lugar</div>
-        </div></div>`:""}
+        <div class="pod-pos p4">4</div><div class="pod-icon">💀</div>
+        <div class="pod-info"><div class="pod-name p4">${esc(fou)}</div>
+        <div class="pod-lbl">4º Lugar</div></div></div>`:""}
     </div>`:"";
 
   return`<div class="chave-wrap">
@@ -347,7 +408,7 @@ function vChave(){
   </div>`;
 }
 
-function setTab(t){S.tab=t;render();}
+function setTab(t){S.tab=t;S.scoreEdit=null;render();}
 function chName(i,v){S.sn[i]=v;render();}
 function chSc(i,d){
   S.sc[i]=Math.max(0,S.sc[i]+d);
@@ -357,16 +418,22 @@ function chSc(i,d){
 }
 function rstSc(){S.sc=[0,0];render();}
 function mClick(el){const fn=el.dataset.fn,t=el.dataset.team;window[fn](t);}
-function rstB(){S.r1a=null;S.r1b=null;S.r2w=null;S.r2l=null;S.ch=null;S.th=null;}
+function rstB(){
+  S.r1a=null;S.r1b=null;S.r2w=null;S.r2l=null;S.ch=null;S.th=null;
+  S.ms={r1a:null,r1b:null,r2w:null,r2l:null,ch:null,th:null};
+  S.scoreEdit=null;
+}
 function rstChave(){rstB();render();}
 function sortear(){S.spinning=true;render();setTimeout(()=>{S.dp=shuffle(DB.map(d=>d.flag+" "+d.name));S.spinning=false;S.sorted=true;rstB();render();},1400);}
 function refazer(){S.sorted=false;S.dp=DB.map(d=>d.flag+" "+d.name);rstB();render();}
-function wR1a(w){S.r1a=w;S.r2w=null;S.r2l=null;S.ch=null;S.th=null;render();}
-function wR1b(w){S.r1b=w;S.r2w=null;S.r2l=null;S.ch=null;S.th=null;render();}
-function wR2w(w){S.r2w=w;S.ch=null;S.th=null;render();}
-function wR2l(w){S.r2l=w;S.ch=null;S.th=null;render();}
-function wCh(w){S.ch=w;render();}
-function wTh(w){S.th=w;render();}
+function wR1a(w){S.r1a=w;S.r2w=null;S.r2l=null;S.ch=null;S.th=null;
+  S.ms.r2w=null;S.ms.r2l=null;S.ms.ch=null;S.ms.th=null;S.scoreEdit=null;render();}
+function wR1b(w){S.r1b=w;S.r2w=null;S.r2l=null;S.ch=null;S.th=null;
+  S.ms.r2w=null;S.ms.r2l=null;S.ms.ch=null;S.ms.th=null;S.scoreEdit=null;render();}
+function wR2w(w){S.r2w=w;S.ch=null;S.th=null;S.ms.ch=null;S.ms.th=null;S.scoreEdit=null;render();}
+function wR2l(w){S.r2l=w;S.ch=null;S.th=null;S.ms.ch=null;S.ms.th=null;S.scoreEdit=null;render();}
+function wCh(w){S.ch=w;S.scoreEdit=null;render();}
+function wTh(w){S.th=w;S.scoreEdit=null;render();}
 
 render();
 </script>
